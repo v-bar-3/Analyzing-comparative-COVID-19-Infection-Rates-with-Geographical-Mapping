@@ -1,7 +1,11 @@
 # Analyzing-comparative-COVID-19-Infection-Rates-with-Geographical-Mapping
 Final project for STA 141A: Fundamentals of Statistical Data Science
 
+![Screenshot_183](https://github.com/v-bar-3/Analyzing-comparative-COVID-19-Infection-Rates-with-Geographical-Mapping/assets/95732984/705b449c-ff5e-41e3-a9af-5de030076d04)
+
+
 Project Prompt:
+
 Working with the New York Times COVID-19 Data
 
 As we have seen in class, COVID-19 data collected by the New York Times are available in a repository on Github. In this final project we will work with these data to reproduce some of the elements of the Times’s reporting on COVID-19.
