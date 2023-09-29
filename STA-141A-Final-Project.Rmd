@@ -1,0 +1,454 @@
+---
+title: "141A Final Project"
+output: html_document
+date: "2023-03-15"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+# Part 1
+
+```{r, include = FALSE}
+install.packages("tidyverse", repos = "http://cran.us.r-project.org")
+install.packages("ggthemes", repos = "http://cran.us.r-project.org")
+install.packages("mapproj", repos = "http://cran.us.r-project.org")
+install.packages("socviz", repos = "http://cran.us.r-project.org")
+install.packages("RColorBrewer", repos = "http://cran.us.r-project.org")
+library(tidyverse)
+library(mapproj)
+library(ggthemes)
+library(socviz)
+library(RColorBrewer)
+```
+
+```{r}
+# Read the file us.csv into R as the data frame us
+us <- read.csv("C:/Users/HP/Documents/us.csv")
+
+# Transform the date column into a column of class Date
+us$date <- as.Date(us$date)
+
+# Use filter() to add a column named new_cases containing the number of new cases reported on each date. The first value in this column will be NA.
+us$new_cases <- stats::filter(us$cases, sides = 1, method = "conv", filter = c(1, -1))
+```
+
+Let's break down this function. The "stats::" preface is included because we installed the tidyverse package, and we want to use the filter from the stats package. This is different from the filter in dplyr, which selects specific corresponding rows from a dataset. This filter, according to R documentation, is meant for "Linear Filtering on a Time Series". We are essentially applying a function on our time series data.
+
+Sides = 1 indicates that we want to use past values only; this is important as we are doing a running differential from the day before.
+
+Method = conv indicates that we want to us a convolution method, which is essentially a running average.
+
+Lastly, our filter is the function we apply. The 1 coefficient is applied to the current row, and the -1 coefficient is applied to the previous row. This essentially computes the difference between the current and previous values in the cases column, which gives us the number of new cases reported on each date. This provides us with a weighted sum for each row, without using diff().
+
+We will repeat this syntax for new_deaths, but instead with the deaths column rather than cases.
+
+```{r}
+# Use filter() to add a column named new_deaths containing the number of new deaths reported on each date. The first value in this column will be NA.
+us$new_deaths <- stats::filter(us$deaths, sides = 1, method = "conv", filter = c(1, -1))
+```
+
+
+For the weekly averages, we will use the same function but with a different filter function. This time, we use rep(1/7,7), where we divide the 7 rows before it by 7. This averages out the cases for the week. The first 7 columns are NA, as we cannot apply an average yet.
+
+```{r}
+# Use filter() to add a column named avg_new_cases where each element represents the mean number of new cases for the previous 7 days (inclusive of the current day)
+us$avg_new_cases <- stats::filter(us$new_cases, rep(1/7,7), sides=1)
+```
+
+We will do the same below for new deaths.
+
+```{r}
+# Use filter() to add a column named avg_new_deaths where each element represents the mean number of new deaths for the previous 7 days (inclusive of the current day)
+us$avg_new_deaths <- stats::filter(us$new_deaths, rep(1/7,7), sides=1)
+```
+
+```{r}
+# View the resulting data frame
+options(scipen = 999)
+#This puts us out of scientific notation and into a more readable decimal notation format. 
+head(us)
+
+```
+
+
+### New Cases Plot
+```{r}
+us_march_1 <- subset(us, date > '2020-02-28')
+plot(us_march_1$date, us_march_1$new_cases, type = "h", col = "gray", xlab =  "Days since March 1st, 2020", ylab = "New Cases per Day", lwd = 2.5, main = "New Covid Cases since March 1st, 2020 (with 7 Day Average")
+lines(us_march_1$date, us_march_1$avg_new_cases, lwd = 4, col = "steelblue")
+```
+
+We can see a large rise in cases at the beginning of 2022, when most states began to ease back their indoor mask mandates and shelter-in-place requirements. At this point, most people in the U.S. were vaccinated, so they were less fearful about getting COVID-19 as their immune system would prevent serious infection.
+
+Beyond this initial hump, the rate of infection went down by a considerable amount. While COVID-19 is still a threat to people with compromised immune systems, I believe that many people have begun to stop fearing the virus as much and therefore have not been getting tested, which would lower the actual new case figures.
+
+
+### New Deaths Plot
+```{r}
+plot(us_march_1$date, us_march_1$new_deaths, type = "h", col = "gray", xlab =  "Days since March 1st, 2020", ylab = "New Deaths per Day", lwd = 2.5, main = "New Covid Deaths in the U.S. since March 1st, 2020 (with 7 Day Average)")
+lines(us_march_1$date, us_march_1$avg_new_deaths, lwd = 4, col = "coral")
+
+us_march_1 %>% filter(new_deaths < 0)
+us_march_1 %>% filter(new_deaths > 10000)
+
+```
+
+We can see some errors in data collection here. There are cases of negative deaths per day, most noticeably on 2022-03-14 where there were -2435 deaths. This is clearly impossible.
+
+In addition, there is a day where there were 12,718 deaths (2022-11-11).
+
+Interestingly, when there was a large spike in cases in 2022, there were much less deaths associated with it than I would expect. I believe that this is due to the wide spread efficacy of the vaccine that prevented serious infection for many of the people who took it.
+
+
+#Part 2
+
+For the states data, we will start by reading it in from the CSV file and doing some small transformations to clean up the data.
+```{r}
+us_states_covid <- read.csv("C:/Users/HP/Documents/us-states.csv")
+
+# Transform the date column into a column of class Date
+us_states_covid$date <- as.Date(us_states_covid$date)
+California <- subset(us_states_covid, state == "California")
+California <- California %>% arrange(date) %>% select(-fips)
+```
+
+Now, we will repeat with the same process we did before to produce new_cases, new_deaths, avg_new_cases, and avg_new_deaths.
+```{r}
+California$new_cases <- stats::filter(California$cases, sides = 1, method = "conv", filter = c(1, -1))
+California$new_deaths <- stats::filter(California$deaths, sides = 1, method = "conv", filter = c(1, -1))
+California$avg_new_cases <- stats::filter(California$new_cases, rep(1/7,7), sides=1)
+California$avg_new_deaths <- stats::filter(California$new_deaths, rep(1/7,7), sides=1)
+```
+
+Our data is now ready to plot! Here is the plot for California new COVID-19 cases since March 1st.
+
+```{r}
+cal_march_1 <- subset(California, date > '2020-02-28')
+plot(cal_march_1$date, cal_march_1$new_cases, type = "h", col = "gray", xlab =  "Days since March 1st, 2020", ylab = "New Cases per Day", lwd = 2.5, main = "New Covid Cases in California since March 1st, 2020 (with 7 Day Average)")
+lines(cal_march_1$date, cal_march_1$avg_new_cases, lwd = 4, col = "steelblue")
+```
+
+This corresponds greatly with the national graph, largely because California is a significant determinant of nationwide cases due it its large population. The large spike at the beginning of 2022 corresponds to Gavin Newsome's easing of the indoor mask mandate.
+
+
+This is the plot for new COVID-19 deaths in California after March 1st, 2020.
+```{r}
+plot(cal_march_1$date, cal_march_1$new_deaths, type = "h", col = "gray", xlab =  "Days since March 1st, 2020", ylab = "New Deaths per Day", lwd = 2.5, main = "New Covid Deaths since March 1st, 2020 (with 7 Day Average)")
+lines(cal_march_1$date, cal_march_1$avg_new_deaths, lwd = 4, col = "coral")
+```
+
+We again see multiple days with negative deaths and a similar huge spike in deaths on a singular day (2022-11-11)
+
+## Part 3
+
+```{r}
+us_counties <- read.csv("C:/Users/HP/Documents/us-counties.csv")
+Yolo <- subset(us_counties, county == "Yolo")
+
+Yolo$date <- as.Date(Yolo$date)
+Yolo <- Yolo %>% arrange(date)
+```
+
+Now, let's do the variable transformations we previously did for the past two parts.
+
+```{r}
+Yolo$new_cases <- stats::filter(Yolo$cases, sides = 1, method = "conv", filter = c(1, -1))
+Yolo$new_deaths <- stats::filter(Yolo$deaths, sides = 1, method = "conv", filter = c(1, -1))
+Yolo$avg_new_cases <- stats::filter(Yolo$new_cases, rep(1/7,7), sides=1)
+Yolo$avg_new_deaths <- stats::filter(Yolo$new_deaths, rep(1/7,7), sides=1)
+```
+
+Here is the plot for new COVID-19 cases in Yolo County after March 1st, 2020.
+
+```{r}
+yolo_march_1 <- subset(Yolo, date > '2020-02-28')
+plot(yolo_march_1$date, yolo_march_1$new_cases, type = "h", col = "gray", xlab =  "Days since March 1st, 2020", ylab = "New Cases per Day", lwd = 2.5, main = "New Covid Cases in Yolo County (with 7 Day Average)")
+lines(yolo_march_1$date,
+  yolo_march_1$avg_new_cases, lwd = 4, col = "steelblue")
+```
+Yolo County's population is largely made up of UC Davis students, and it is reflected in this graph. We can see a large noticeable spike at the beginning of 2022 when students began to come in person again for class. This make sense, as placing thousands of students in a small area will increase the overall spread by a very large amount compared to people doing remote education.
+
+In comparison to the rest of California, we see a rise in cases at a similar time.While UC Davis students were allowed back on campus, the indoor mask mandate for the state of California was lifted for vaccinated individuals on February 15th, 2022. For many counties, it was lifted long before that. In addition, other UC and Cal State schools began in-person schooling again. 
+
+This all accumulated in an overall spike in cases throughout California.
+
+```{r}
+yolo_march_1 %>% filter(new_cases > 1500)
+```
+
+This is the plot for new COVID-19 deaths in Yolo County after March 1st, 2020.
+```{r}
+plot(yolo_march_1$new_deaths, type = "h", col = "gray", xlab =  "Days since March 1st, 2020", ylab = "New Deaths per Day", lwd = 2.5, main = "New Covid Deaths since March 1st, 2020 (with 7 Day Average)")
+lines(yolo_march_1$avg_new_deaths, lwd = 4, col = "coral")
+
+Yolo %>% filter(new_deaths < 0)
+```
+
+In the Yolo County dataset, we see many cases of negative deaths. However, these are relatively small observations due to the small amount of total COVID-19 deaths in Yolo County.
+
+# Bonus
+
+### State Level Data
+First, let's load in the maps package to begin.
+
+```{r, include = FALSE}
+install.packages("maps", repos = "http://cran.us.r-project.org")
+library(maps)
+```
+
+```{r}
+us_states <- map_data("state")
+
+#Let's look at our  data for covid. We are going to need to total all of the cases and deaths over the course of a year in each individual state. Also, in order to join our datasets for proper plotting, we need to make all of the state names lowercase. We can do that just before the join. For now, let's start with getting the yearly totals.
+
+head(us_states_covid, n = 20)
+
+us_states_covid <- mutate(us_states_covid, year = year(date))
+# Group the data by state and year, and summarize the cases and deaths
+state_yearly_totals <- us_states_covid %>%
+  filter(year %in% c(2020, 2021, 2022) & month(date) == 12 & day(date) == 31) %>%
+  group_by(state, year) %>%
+  summarize(total_cases = cases,
+            total_deaths = deaths)
+
+#Now, we have to find the differential between each year to get the actual amount that occured for that year. We'll do this a bit differently from how we did it before.
+
+state_yearly_totals <- state_yearly_totals %>%
+  mutate(diff_cases = ifelse(year == 2020, 0, total_cases - lag(total_cases)),
+         diff_deaths = ifelse(year == 2020, 0, total_deaths - lag(total_deaths)))
+
+
+#We can now use this differential number for our total cases and deaths values if it is not equal to 0 (for 2020) or NA (for territories that did not track cases in 2020 like American Samoa)
+
+state_yearly_totals <- state_yearly_totals %>%
+  mutate(total_cases = ifelse(diff_cases == 0 | is.na(diff_cases), total_cases, diff_cases),
+         total_deaths = ifelse(diff_deaths == 0 | is.na(diff_deaths), total_deaths, diff_deaths))
+
+#Now, we can exclude the diff_cases and diff_deaths
+state_yearly_totals <- state_yearly_totals %>% select(state, year, total_cases, total_deaths)
+
+state_totals <- state_yearly_totals
+state_totals$region <- tolower(state_totals$state)
+
+#Before we merge the datasets, we need to seperate the state_totals by year so that the two can be properly joined. This means that we will have three different plots; one for each completed year.
+
+state_totals_2020 <- state_totals %>% filter(year == 2020)
+state_totals_2021 <- state_totals %>% filter(year == 2021)
+state_totals_2022 <- state_totals %>% filter(year == 2022)
+
+
+
+us_states_2020 <- left_join(us_states, state_totals_2020)
+us_states_2021 <- left_join(us_states, state_totals_2021)
+us_states_2022 <- left_join(us_states, state_totals_2022)
+
+```
+
+```{r}
+p0 <- ggplot(data = us_states_2020,
+             mapping = aes(x = long, y = lat, group = group, fill = total_cases))
+
+p1 <- p0 + geom_polygon(color = "gray90", lwd = 0.1) +
+    coord_map(projection = "albers", lat0 = 39, lat1 = 45) 
+
+p1 + labs(title = "Number of COVID-19 Cases in 2020 by State") + scale_fill_gradient(low = "white", high = "#CB454A") + theme_map()
+```
+
+Looking at the yearly total of cases for each state, we can see that California is the frontrunner, with Texas, Florida, and New York not far behind it.
+
+
+```{r}
+p0 <- ggplot(data = us_states_2021,
+             mapping = aes(x = long, y = lat, group = group, fill = total_cases))
+
+p1 <- p0 + geom_polygon(color = "gray90", size = 0.1) +
+    coord_map(projection = "albers", lat0 = 39, lat1 = 45) 
+
+p1 + labs(title = "Number of COVID-19 Cases in 2021 by State") + scale_fill_gradient(low = "white", high = "#CB454A") + theme_map()
+```
+
+Although 2021 appears quite similar, there is a noticeable rise in cases in Ohio, Pennsylvania, Michigan, Illinois, Washington, North Carolina, and Georgia.
+
+Many of these states either have densely packed urban areas or had less strict shelter-in-place restrictions that enabled the virus to spread more easily.
+
+```{r}
+p0 <- ggplot(data = us_states_2022,
+             mapping = aes(x = long, y = lat, group = group, fill = total_cases))
+
+p1 <- p0 + geom_polygon(color = "gray90", size = 0.1) +
+    coord_map(projection = "albers", lat0 = 39, lat1 = 45) 
+
+p1 + labs(title = "Number of COVID-19 Cases in 2022 by State") + scale_fill_gradient(low = "white", high = "#CB454A") + theme_map()
+```
+
+In 2022, California had by far the most cases, with over 6,000,000. This can be attributed to both California's large population and densely populated areas like Los Angeles and San Francisco.
+
+Now, we'll do the same with total deaths. We will use white and black as our color gradient. Hopefully, the map will be more clear this time and it will display the apparent feeling of mortality. It may not display the difference between the top states as clearly, but it will be good to see insight on some of the states with second-tier high mortality rates.
+
+```{r}
+p0 <- ggplot(data = us_states_2020,
+             mapping = aes(x = long, y = lat, group = group, fill = total_deaths))
+
+p1 <- p0 + geom_polygon(color = "gray90", size = 0.1) +
+    coord_map(projection = "albers", lat0 = 39, lat1 = 45) 
+
+p1 + labs(title = "Number of COVID-19 related Deaths in 2020 by State") + scale_fill_gradient(low = "white", high = "black") + theme_map()
+```
+Despite California having the most cases, New York actually had more deaths in 2020. Florida, Texas, Illinois, and New Jersey were also notable standouts.
+
+```{r}
+p0 <- ggplot(data = us_states_2021,
+             mapping = aes(x = long, y = lat, group = group, fill = total_deaths))
+
+p1 <- p0 + geom_polygon(color = "gray90", size = 0.1) +
+    coord_map(projection = "albers", lat0 = 39, lat1 = 45) 
+
+p1 + labs(title = "Number of COVID-19 related Deaths in 2021 by State") + scale_fill_gradient(low = "white", high = "black") + theme_map()
+```
+While California, Texas, and Florida are unsuprisingly the states with the highest number of deaths, there are a surprisingly a lot more red states on this map in comparison to the overall cases map. Arizona, Georgia, Pennsylvania, and Ohio are notably more apparent on this map than on the overall cases map.
+
+```{r}
+p0 <- ggplot(data = us_states_2022,
+             mapping = aes(x = long, y = lat, group = group, fill = total_deaths))
+
+p1 <- p0 + geom_polygon(color = "gray90", size = 0.1) +
+    coord_map(projection = "albers", lat0 = 39, lat1 = 45) 
+
+p1 + labs(title = "Number of COVID-19 related Deaths in 2022 by State") + scale_fill_gradient(low = "white", high = "black") + theme_map()
+```
+In 2022, California, NY, and Florida have the highest number of deaths. Noticeably, the Midwest was greatly affected this year. Illinois, North Carolina, and Michigan are some new standouts on this map. Pennsylvania and Ohio remain afflicted from 2021's batch of COVID-19 related deaths. Missouri, Washington, and Colorado also appeared to have more deaths this year.
+
+This has been a great exercise for refreshing my geography knowledge!
+
+### County Level Data
+
+```{r}
+us_counties_map <- county_map
+
+head(us_counties)
+
+us_counties <- mutate(us_counties, year = year(date))
+# Group the data by state and year, and summarize the cases and deaths
+
+suppressWarnings(us_counties <- us_counties %>%
+  filter(year %in% c(2020, 2021, 2022) & month(date) == 12 & day(date) == 31) %>%
+  group_by(county, year) %>%
+  summarize(state, fips, total_cases = cases,
+            total_deaths = deaths))
+
+#Now, we have to find the differential between each year to get the actual amount that occured for that year. We'll do this a bit differently from how we did it before.
+
+us_counties <- us_counties %>%
+  mutate(diff_cases = ifelse(year == 2020, 0, total_cases - lag(total_cases)),
+         diff_deaths = ifelse(year == 2020, 0, total_deaths - lag(total_deaths)))
+
+
+#We can now use this differential number for our total cases and deaths values if it is not equal to 0 (for 2020) or NA (for territories that did not track cases in 2020 like American Samoa)
+
+us_counties <- us_counties %>%
+  mutate(total_cases = ifelse(diff_cases == 0 | is.na(diff_cases), total_cases, diff_cases),
+         total_deaths = ifelse(diff_deaths == 0 | is.na(diff_deaths), total_deaths, diff_deaths))
+
+#Now, we can exclude the diff_cases and diff_deaths
+us_counties <- us_counties %>% select(state, year, county, fips, total_cases, total_deaths)
+
+us_counties$region <- tolower(us_counties$state)
+us_counties$subregion <- tolower(us_counties$county)
+us_counties$id <- us_counties$fips
+
+
+#Before we merge the datasets, we need to seperate the state_totals by year so that the two can be properly joined. This means that we will have three different plots; one for each completed year.
+
+county_totals_2020 <- us_counties %>% filter(year == 2020)
+county_totals_2021 <- us_counties %>% filter(year == 2021)
+
+
+us_counties_map$id <- as.integer(us_counties_map$id)
+
+county_full_2020 <- left_join(us_counties_map, county_totals_2020, by = "id")
+county_full_2021 <- left_join(us_counties_map, county_totals_2021, by = "id")
+```
+
+I had a lot of trouble translating the previous setup to a county level. Because of a few select counties with much more cases than the vast majority of the map (Los Angeles, Dallas, New York City), the entire map was white with a few specks of blue. Therefore, I found a way to use cut() to split the data into 8 groups based on some arbitrary figures. Using RColorBrewer (recommended on SocViz), we can generate 7 colors for our different categorized counties. Although omitted from the legend (for some unknown reason), the darkest shade of red represents >100,000 cases.
+
+```{r}
+pal <- brewer.pal(7, "YlOrRd")
+p <- ggplot(data = county_full_2020,
+            mapping = aes(x = long, y = lat, group = group, fill = cut(total_cases, breaks = c(0, 1000, 5000, 10000, 25000, 50000, 100000, Inf))))
+
+p1 <- p + geom_polygon(color = "gray90", linewidth = 0.01) + coord_equal()
+
+p2 <- p1 + scale_fill_manual(values = pal, name = "Total Cases", labels = c(">1000", "1000-5000", "5000-10000", "10000-25000", "25000-50000", "50000-100000", ">100000"))
+
+p2 + labs(fill = "Cases Per County", title = "County-level COVID-19 Cases", subtitle = "From January 1st 2020 to December 31st 2020") +
+    theme_map() +
+    guides(fill = guide_legend(nrow = 1)) + 
+    theme(legend.position = "bottom")
+```
+
+Now, let's look at 2021's map and see how they compare.
+
+```{r}
+pal <- brewer.pal(7, "YlOrRd")
+p <- ggplot(data = county_full_2021,
+            mapping = aes(x = long, y = lat, group = group, fill = cut(total_cases, breaks = c(0, 1000, 5000, 10000, 25000, 50000, 100000, Inf))))
+
+p1 <- p + geom_polygon(color = "gray90", linewidth = 0.01) + coord_equal()
+
+p2 <- p1 + scale_fill_manual(values = pal, name = "Total Cases", labels = c(">1000", "1000-5000", "5000-10000", "10000-25000", "25000-50000", "50000-100000", ">100000"))
+
+p2 + labs(fill = "Covid Per County", title = "County-level COVID-19 Cases", subtitle = "From January 1st 2021 to December 31st 2021") +
+    theme_map() +
+    guides(fill = guide_legend(nrow = 1)) + 
+    theme(legend.position = "bottom")
+```
+
+For whatever reason, it appears that our 2021 has a lot more missing data. This may have been a data collection issue or a computational issue in my data transformations. Regardless, there is an overall increase in cases across the United States. Most notably, there is much more red counties throughout the Midwest and East. 
+
+we will do a similar process with Covid-19 related deaths. However, we do have change our scales, since there are much less deaths than cases.
+
+```{r}
+pal <- brewer.pal(7, "PuBuGn")
+p <- ggplot(data = county_full_2020,
+            mapping = aes(x = long, y = lat, group = group, fill = cut(total_deaths, breaks = c(0, 20, 50, 100, 500, 1000, 5000, Inf))))
+
+
+p1 <- p + geom_polygon(color = "gray90", linewidth = 0.01) + coord_equal()
+
+p2 <- p1 + scale_fill_manual(values = pal, name = "Total Cases", labels = c("0-20","21-50", "51-100", "101-500", "501-1,000", "1,001-5,000", ">5,000"))
+
+p2 + labs(fill = "Covid Per County", title = "County-level COVID-19 Deaths", subtitle = "From January 1st 2020 to December 31st 2020") +
+    theme_map() +
+    guides(fill = guide_legend(nrow = 1)) + 
+    theme(legend.position = "bottom")
+```
+
+Our first map is relatively sparce (which is good!). There are not many deaths across the United States outside of the areas with very high case figures like Los Angeles, New York City, and Miami-Dade counties.
+
+
+```{r}
+pal <- brewer.pal(7, "PuBuGn")
+p <- ggplot(data = county_full_2021,
+            mapping = aes(x = long, y = lat, group = group, fill = cut(total_deaths, breaks = c(0, 20, 50, 100, 500, 1000, 5000, Inf))))
+
+
+p1 <- p + geom_polygon(color = "gray90", linewidth = 0.01) + coord_equal()
+
+p2 <- p1 + scale_fill_manual(values = pal, name = "Total Cases", labels = c("0-20","21-50", "51-100", "101-500", "501-1,000", "1,001-5,000", ">5,000"))
+
+p2 + labs(fill = "Covid Per County", title = "County-level COVID-19 Deaths", subtitle = "From January 1st 2021 to December 31st 2021") +
+    theme_map() +
+    guides(fill = guide_legend(nrow = 1)) + 
+    theme(legend.position = "bottom")
+```
+
+We again see an issue with missing data, but also a noticeable increase in deaths throughout the Midwest and East coast; quite similar to the cases map. 
+
+# Summary
+
+We have found that there is a large correlation between upticks in cases in Yolo County, California, and the United States. Yolo County's population is largely made up of UC Davis students, and it is reflected in its graph. We can see a large noticeable spike at the beginning of 2022 when students began to come in person again for class. This make sense, as placing thousands of students in a small area will increase the overall spread by a very large amount compared to people doing remote education.
+
+In comparison to the rest of California, we see a rise in cases at a similar time. While UC Davis students were allowed back on campus, the indoor mask mandate for the state of California was lifted for vaccinated individuals on February 15th, 2022. For many individual counties in California, it was lifted long before that. In addition, other UC and Cal State schools began in-person schooling again. 
+
+This lead to a massive surge in cases in California, which thus has a large impact on the national case averages. We can see from the California death chart, however, that the surge in cases did not cause a proportionally large surge in COVID-19 related deaths. We can attribute this to the vaccine's efficacy, and the helping hand of Californians to take the vaccine willingly.
